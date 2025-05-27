@@ -1,24 +1,18 @@
 """
 Data Ingestion Script - Penyakit Sumatera Utara
-Fungsi: Membaca CSV dan melakukan initial data loading ke PostgreSQL
+Fungsi: Membaca CSV dan melakukan initial data cleaning
 """
 
 import os
 import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, trim, regexp_replace
-from pyspark.sql.types import *
-import psycopg2
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 def create_spark_session():
-    """Membuat Spark Session dengan konfigurasi PostgreSQL"""
+    """Membuat Spark Session"""
     spark = SparkSession.builder \
         .appName("PenyakitSumut-DataIngestion") \
-        .config("spark.jars", "/opt/bitnami/spark/jars/postgresql-42.6.0.jar") \
         .getOrCreate()
     
     spark.sparkContext.setLogLevel("WARN")
@@ -51,39 +45,6 @@ def validate_data(df):
     df_valid.show(5, truncate=False)
     
     return df_valid
-
-def insert_kabupaten_data(df):
-    """Insert data kabupaten ke PostgreSQL"""
-    try:
-        # Database connection
-        conn = psycopg2.connect(
-            host=os.getenv('POSTGRES_HOST', 'localhost'),
-            port=os.getenv('POSTGRES_PORT', '5432'),
-            database=os.getenv('POSTGRES_DB', 'penyakit_db'),
-            user=os.getenv('POSTGRES_USER', 'postgres'),
-            password=os.getenv('POSTGRES_PASSWORD', 'password123')
-        )
-        cursor = conn.cursor()
-        
-        # Get unique kabupaten names
-        kabupaten_list = [row['kabupaten_kota'] for row in df.select("kabupaten_kota").distinct().collect()]
-        
-        # Insert kabupaten data
-        for kabupaten in kabupaten_list:
-            cursor.execute("""
-                INSERT INTO kabupaten (nama_kabupaten) 
-                VALUES (%s) 
-                ON CONFLICT (nama_kabupaten) DO NOTHING
-            """, (kabupaten,))
-        
-        conn.commit()
-        print(f"✅ Berhasil insert {len(kabupaten_list)} kabupaten")
-        
-        cursor.close()
-        conn.close()
-        
-    except Exception as e:
-        print(f"❌ Error inserting kabupaten data: {e}")
 
 def save_to_parquet(df, output_path):
     """Simpan data ke format Parquet"""
@@ -137,9 +98,6 @@ def main():
         # Clean and validate data
         df_clean = clean_kabupaten_name(df)
         df_valid = validate_data(df_clean)
-        
-        # Insert kabupaten data to PostgreSQL
-        insert_kabupaten_data(df_valid)
         
         # Save to Parquet
         parquet_path = "/data/parquet/penyakit_clean.parquet"

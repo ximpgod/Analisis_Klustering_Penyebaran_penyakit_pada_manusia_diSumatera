@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.env
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Spark and Hadoop (if local logs or temp files are generated outside Docker)
+# *.log (too general, better to specify paths if needed)
+# hs_err_pid*
+
+# Data files - These are often large or generated, consider if they should be versioned
+# If your CSV/Parquet files in data/ are raw input, keep them. 
+# If they are intermediate or final outputs, ignore them.
+# For this project, output and parquet are generated.
+data/output/
+data/parquet/
+data/logs/
+
+# Docker (sometimes .dockerignore is versioned, but local docker-compose overrides or specific logs might be ignored)
+# docker-compose.override.yml
+
+# Build artifacts
+build/
+dist/
+*.tar.gz
+*.zip
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Other
+*.bak
+*.tmp

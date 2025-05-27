@@ -7,16 +7,11 @@ import os
 import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, when, isnan, isnull, sum as spark_sum
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 def create_spark_session():
     """Membuat Spark Session"""
     spark = SparkSession.builder \
         .appName("PenyakitSumut-ETLTransform") \
-        .config("spark.jars", "/opt/bitnami/spark/jars/postgresql-42.6.0.jar") \
         .getOrCreate()
     
     spark.sparkContext.setLogLevel("WARN")
@@ -98,29 +93,6 @@ def create_feature_summary(df):
     
     return df
 
-def save_pivot_to_postgres(df):
-    """Simpan data pivot ke PostgreSQL"""
-    print("\n=== SAVING TO POSTGRESQL ===")
-    
-    try:
-        # PostgreSQL connection properties
-        postgres_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
-        properties = {
-            "user": os.getenv('POSTGRES_USER'),
-            "password": os.getenv('POSTGRES_PASSWORD'),
-            "driver": "org.postgresql.Driver"
-        }
-        
-        # Save to PostgreSQL
-        df.write \
-            .mode("overwrite") \
-            .jdbc(url=postgres_url, table="data_pivot", properties=properties)
-        
-        print("✅ Data berhasil disimpan ke PostgreSQL table: data_pivot")
-        
-    except Exception as e:
-        print(f"❌ Error saving to PostgreSQL: {e}")
-
 def save_to_parquet(df, output_path):
     """Simpan data yang sudah ditransformasi ke Parquet"""
     try:
@@ -153,9 +125,6 @@ def main():
         
         # Create feature summary
         df_final = create_feature_summary(df_normalized)
-        
-        # Save to PostgreSQL
-        save_pivot_to_postgres(df_final)
         
         # Save to Parquet for clustering
         parquet_path = "/data/parquet/penyakit_transformed.parquet"

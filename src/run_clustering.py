@@ -10,18 +10,11 @@ from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
 from pyspark.sql.functions import col, desc, asc
-import matplotlib.pyplot as plt
-import seaborn as sns
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 def create_spark_session():
     """Membuat Spark Session"""
     spark = SparkSession.builder \
         .appName("PenyakitSumut-Clustering") \
-        .config("spark.jars", "/opt/bitnami/spark/jars/postgresql-42.6.0.jar") \
         .getOrCreate()
     
     spark.sparkContext.setLogLevel("WARN")
@@ -149,35 +142,6 @@ def analyze_clusters(predictions):
     
     return predictions
 
-def save_results_to_postgres(predictions):
-    """Simpan hasil clustering ke PostgreSQL"""
-    print("\n=== SAVING RESULTS TO POSTGRESQL ===")
-    
-    try:
-        # Select only necessary columns
-        results_df = predictions.select(
-            col("kabupaten_kota").alias("kabupaten"),
-            col("prediction").alias("cluster_id")
-        )
-        
-        # PostgreSQL connection properties
-        postgres_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
-        properties = {
-            "user": os.getenv('POSTGRES_USER'),
-            "password": os.getenv('POSTGRES_PASSWORD'),
-            "driver": "org.postgresql.Driver"
-        }
-        
-        # Save to PostgreSQL
-        results_df.write \
-            .mode("overwrite") \
-            .jdbc(url=postgres_url, table="hasil_klaster", properties=properties)
-        
-        print("✅ Hasil clustering berhasil disimpan ke PostgreSQL table: hasil_klaster")
-        
-    except Exception as e:
-        print(f"❌ Error saving to PostgreSQL: {e}")
-
 def save_results_to_parquet(predictions):
     """Simpan hasil clustering ke Parquet"""
     try:
@@ -243,9 +207,6 @@ def main():
         
         # Analyze clusters
         final_predictions = analyze_clusters(predictions)
-        
-        # Save results to PostgreSQL
-        save_results_to_postgres(final_predictions)
         
         # Save results to Parquet
         save_results_to_parquet(final_predictions)

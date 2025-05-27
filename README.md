@@ -1,14 +1,14 @@
 # 🏥 Clustering Penyakit Sumatera Utara
 
-Pipeline big data untuk clustering kasus penyakit di Sumatera Utara menggunakan Apache Spark dan Machine Learning. Proyek ini mengimplementasikan end-to-end pipeline untuk analisis dan visualisasi pola penyakit di kabupaten/kota di Sumatera Utara.
+Pipeline big data untuk clustering kasus penyakit di Sumatera Utara menggunakan Apache Spark dan PostgreSQL. Proyek ini mengimplementasikan end-to-end batch processing pipeline untuk analisis dan visualisasi pola penyakit di kabupaten/kota di Sumatera Utara.
 
 ## 🎯 Tujuan Proyek
 
-Mengembangkan sistem clustering untuk:
-- 📊 Mengelompokkan kabupaten/kota berdasarkan kemiripan pola penyakit
+Mengembangkan sistem batch processing pipeline untuk:
+- 📊 Mengelompokkan kabupaten/kota berdasarkan kemiripan pola penyakit dengan KMeans
 - 🎯 Mengidentifikasi wilayah dengan beban penyakit tinggi
 - 📈 Memberikan insights untuk alokasi sumber daya kesehatan
-- 🗺️ Menyediakan visualisasi untuk decision makers
+- 🗺️ Menyediakan data untuk visualisasi di Tableau
 
 ## 🏗️ Arsitektur Sistem
 

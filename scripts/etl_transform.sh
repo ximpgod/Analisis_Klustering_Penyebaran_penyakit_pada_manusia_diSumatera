@@ -1,61 +1,43 @@
 #!/bin/bash
 
-# Script untuk ETL Transform - Penyakit Sumatera Utara
-# Menjalankan proses transformasi dan persiapan data untuk clustering
+# Script untuk menjalankan ETL Transform
+# Tim Data Engineering - Institut Teknologi Sumatera
 
-set -e  # Exit on any error
+set -e
 
-echo "🔄 MEMULAI ETL TRANSFORMATION"
-echo "========================================="
+echo "🔄 MENJALANKAN ETL TRANSFORM"
+echo "==========================="
 
-# Check if clean data exists
-if [ ! -d "/data/parquet/penyakit_clean.parquet" ]; then
-    echo "❌ Error: Clean data tidak ditemukan!"
-    echo "   Jalankan ingest_data.sh terlebih dahulu"
+# Cek apakah Docker berjalan
+if ! docker ps > /dev/null 2>&1; then
+    echo "❌ Docker tidak berjalan. Silakan jalankan Docker terlebih dahulu."
     exit 1
 fi
 
-# Wait for PostgreSQL to be ready
-echo "⏳ Menunggu PostgreSQL siap..."
-until pg_isready -h postgres -p 5432 -U postgres; do
-    echo "  PostgreSQL belum siap, menunggu 5 detik..."
-    sleep 5
-done
-echo "✅ PostgreSQL sudah siap"
-
-# Install required Python packages if not already installed
-echo "📦 Checking Python packages..."
-pip install -q python-dotenv psycopg2-binary
-
-# Run the ETL transform script
-echo "🔄 Menjalankan script ETL transformation..."
-cd /app
-
-python etl_transform.py
-
-if [ $? -eq 0 ]; then
-    echo "✅ ETL TRANSFORMATION BERHASIL DISELESAIKAN"
-    echo "📊 Data telah ditransformasi dan disimpan ke:"
-    echo "   - PostgreSQL: table data_pivot"
-    echo "   - Parquet: /data/parquet/penyakit_transformed.parquet"
-    
-    # Verify transformation results
-    echo ""
-    echo "🔍 Verifikasi hasil transformasi:"
-    
-    # Count records in PostgreSQL
-    RECORD_COUNT=$(psql -h postgres -U postgres -d penyakit_db -t -c "SELECT COUNT(*) FROM data_pivot;" 2>/dev/null || echo "0")
-    echo "   Records in data_pivot table: $RECORD_COUNT"
-    
-    if [ "$RECORD_COUNT" -gt "0" ]; then
-        echo "✅ Transformasi berhasil - data tersedia untuk clustering"
-    else
-        echo "⚠️  Warning: Tidak ada data di table data_pivot"
-    fi
-    
-else
-    echo "❌ ETL TRANSFORMATION GAGAL"
+# Cek apakah container spark_master ada
+if ! docker ps -a | grep -q spark_master; then
+    echo "❌ Container spark_master tidak ditemukan. Silakan jalankan ./start_docker.sh terlebih dahulu."
     exit 1
 fi
 
-echo "========================================="
+# Cek apakah data inputan telah tersedia
+if ! docker exec spark_master ls -la /data/parquet/penyakit_clean.parquet > /dev/null 2>&1; then
+    echo "❌ Data clean belum tersedia. Silakan jalankan ./scripts/ingest_data.sh terlebih dahulu."
+    exit 1
+fi
+
+# Jalankan ETL transform script
+echo "📝 Menjalankan script etl_transform.py..."
+docker exec spark_master /spark/bin/spark-submit \
+    --master spark://spark-master:7077 \
+    --driver-memory 1g \
+    --executor-memory 1g \
+    /app/etl_transform.py
+
+# Tampilkan hasil parquet
+echo ""
+echo "📊 Hasil ETL Transform:"
+docker exec spark_master ls -lah /data/parquet/
+
+echo ""
+echo "✅ ETL TRANSFORM SELESAI"
