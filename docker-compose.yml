@@ -1,241 +1,100 @@
-# Docker Compose untuk Sistem Big Data Prediksi Diabetes
-
+version: '3.8'
 
 services:
-  namenode:
-    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
-    container_name: namenode
-    hostname: namenode
+  postgres:
+    image: postgres:15
+    container_name: postgres_penyakit
     environment:
-      - CLUSTER_NAME=hadoop-cluster
+      POSTGRES_DB: penyakit_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "9870:9870"
-      - "8020:8020" # Expose HDFS port
+      - "5432:5432"
     volumes:
-      - hdfs_namenode:/hadoop/dfs/name
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/schema_postgres.sql:/docker-entrypoint-initdb.d/schema_postgres.sql
       - ./data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9870"]
-      interval: 1m
-      timeout: 20s
-      retries: 10
-      start_period: 2m
     networks:
-      - hadoop-net
-
-  datanode:
-    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
-    container_name: datanode
-    hostname: datanode
-    environment:
-      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
-      - SERVICE_PRECONDITION=namenode:9870
-    ports:
-      - "9864:9864"
-    volumes:
-      - hdfs_datanode:/hadoop/dfs/data
-      - ./data:/data
-    depends_on:
-      namenode:
-        condition: service_healthy
-    networks:
-      - hadoop-net
-
-  resourcemanager:
-    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
-    container_name: resourcemanager
-    ports:
-      - "8088:8088"
-      - "8031:8031"  # Expose ResourceManager port
-    environment:
-      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
-      - YARN_CONF_yarn_resourcemanager_hostname=resourcemanager
-      - YARN_CONF_yarn_resourcemanager_address=resourcemanager:8032
-      - YARN_CONF_yarn_resourcemanager_scheduler_address=resourcemanager:8030
-      - YARN_CONF_yarn_resourcemanager_resource__tracker_address=resourcemanager:8031
-      - YARN_CONF_yarn_timeline___service_enabled=true
-    depends_on:
-      - namenode
-    networks:
-      - hadoop-net
-
-  nodemanager:
-    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
-    container_name: nodemanager
-    environment:
-      - CORE_CONF_fs_defaultFS=hdfs://namenode:8020
-      - YARN_CONF_yarn_resourcemanager_hostname=resourcemanager
-      - YARN_CONF_yarn_nodemanager_pmem___check___enabled=false
-      - YARN_CONF_yarn_nodemanager_vmem___check___enabled=false
-      - YARN_CONF_yarn_nodemanager_resource_memory___mb=8192
-      - YARN_CONF_yarn_nodemanager_resource_cpu___vcores=4
-    depends_on:
-      - resourcemanager
-    networks:
-      - hadoop-net
-      
-  postgres-metastore:
-    image: postgres:12.3
-    container_name: postgres-metastore
-    hostname: postgres-metastore
-    environment:
-
-      - POSTGRES_HOST_AUTH_METHOD=trust
-      - POSTGRES_DB=hive
-      - POSTGRES_USER=hive
-      - POSTGRES_PASSWORD=hive
-
-    
-    volumes:
-      - postgres-metastore-data:/var/lib/postgresql/data
-    networks:
-      - hadoop-net
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "hive"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+      - penyakit_network
 
   spark-master:
-    image: bitnami/spark:latest
-    container_name: spark-master
+    image: bitnami/spark:3.4
+    container_name: spark_master
     environment:
       - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
     ports:
+      - "8080:8080"
       - "7077:7077"
-      - "8081:8080"  # Spark Master UI (host:container)
     volumes:
+      - ./data:/data
+      - ./src:/app
       - ./scripts:/scripts
     networks:
-      - hadoop-net
+      - penyakit_network
 
   spark-worker:
-    image: bitnami/spark:latest
-    container_name: spark-worker
+    image: bitnami/spark:3.4
+    container_name: spark_worker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
     depends_on:
       - spark-master
-    ports:
-      - "8082:8081"  # Spark Worker UI (host:container)
     volumes:
+      - ./data:/data
+      - ./src:/app
       - ./scripts:/scripts
     networks:
-      - hadoop-net
-  hive-server:
-    image: bde2020/hive:2.3.2-postgresql-metastore
-    container_name: hive-server
-    hostname: hive-server
-    environment:
-      - HIVE_METASTORE_DB_TYPE=postgresql
-      - HIVE_METASTORE_DB_HOST=postgres-metastore
-      - HIVE_METASTORE_DB_PORT=5432
-      - HIVE_METASTORE_DB_NAME=hive
-      - HIVE_METASTORE_DB_USER=hive
-      - HIVE_METASTORE_DB_PASSWORD=hive
-    ports:
-      - "10000:10000"  # HiveServer2 port (host:container)
-    depends_on:
-      - hive-metastore
-    networks:
-      - hadoop-net
-    volumes:
-      - ./postgresql-42.2.5.jar:/opt/hive/lib/postgresql-42.2.5.jar
-    healthcheck:
-      test: ["CMD", "hive", "-e", "SHOW DATABASES"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
-  hive-metastore:
-    image: bde2020/hive:2.3.2-postgresql-metastore
-    container_name: hive-metastore
-    hostname: hive-metastore
-    environment:
-      - HIVE_METASTORE_DB_TYPE=postgresql
-      - HIVE_METASTORE_DB_HOST=postgres-metastore
-      - HIVE_METASTORE_DB_PORT=5432
-      - HIVE_METASTORE_DB_NAME=hive
-      - HIVE_METASTORE_DB_USER=hive
-      - HIVE_METASTORE_DB_PASSWORD=hive
-    depends_on:
-      - postgres-metastore
-    networks:
-      - hadoop-net
-    volumes:
-      - ./postgresql-42.2.5.jar:/opt/hive/lib/postgresql-42.2.5.jar
-    healthcheck:
-      test: ["CMD", "hive", "-e", "SHOW DATABASES"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+      - penyakit_network
 
-  superset:
-    image: apache/superset
-    container_name: superset
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter_notebook
     ports:
-      - "8083:8088"  # Superset UI (host:container)
-    depends_on:
-      - hive-server
+      - "8888:8888"
     environment:
-      - SUPERSET_SECRET_KEY=323213231rfacfq3rqcfR3R12W
-      - SUPERSET_ENV=production
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin
-      - ADMIN_EMAIL=admin@example.com
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=penyakit123
     volumes:
-      - superset_home:/app/superset_home
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/work/data
+      - ./src:/home/jovyan/work/src
     networks:
-      - hadoop-net
-    restart: unless-stopped
-
-  airflow-postgres:
-    image: postgres:12
-    container_name: airflow-postgres
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-    volumes:
-      - airflow-db-volume:/var/lib/postgresql/data
-    networks:
-      - hadoop-net
-
-  airflow:
-    image: puckel/docker-airflow:1.10.9
-    container_name: airflow
-    restart: unless-stopped
-    ports:
-      - "8089:8080"  # Airflow UI (host:container)
-    environment:
-      - LOAD_EX=y
-      - POSTGRES_HOST=airflow-postgres
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
-    volumes:
-      - ./airflow/dags:/usr/local/airflow/dags
-      - ./logs:/usr/local/airflow/logs
-      - ./data:/data
+      - penyakit_network
     depends_on:
-      - airflow-postgres
+      - postgres
       - spark-master
-      - hive-server
-      - superset
-      
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     networks:
-      - hadoop-net
+      - penyakit_network
+    depends_on:
+      - postgres
 
 volumes:
-  hdfs_namenode:
-  hdfs_datanode:
-  superset_home:
-  postgres-metastore-data:
-  airflow-db-volume:
+  postgres_data:
+  pgadmin_data:
 
 networks:
-  hadoop-net:
-
+  penyakit_network:
+    driver: bridge
